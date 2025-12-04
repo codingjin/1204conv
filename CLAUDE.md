@@ -8,6 +8,7 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 1. Tunes Conv2D kernels using TVM auto-scheduler
 2. Generates executable CUDA kernels
 3. Measures energy consumption across different GPU power caps
+4. Aggregates measurement results into structured CSV files
 
 ## Project Structure
 
@@ -26,6 +27,9 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 - `gpu_setup.py` - Sets GPU power caps (for measurement)
 - `setup_passwordless_sudo.sh` - Configures passwordless sudo
 
+**Post-Processing:**
+- `generate_perfenergy.py` - Aggregates measurement results to CSV
+
 **Utilities:**
 - `clean.sh` - Removes all generated files
 
@@ -34,7 +38,7 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 ```
 Source files (version controlled):
   conv_tuning.py, genkernels.py, gpu_setup.py, demo.cu, main.cpp
-  tuning_gpu_setup.sh, setup_passwordless_sudo.sh, clean.sh
+  generate_perfenergy.py, tuning_gpu_setup.sh, setup_passwordless_sudo.sh, clean.sh
   README.md, CLAUDE.md
 
 Generated files (NOT version controlled):
@@ -166,6 +170,52 @@ GPU_CONFIGS = {
     'NVIDIA A30': {'power_caps': [100, 120, 140, 160, 165]},
     'NVIDIA A100': {'power_caps': [100, 200, 300, 400, 450]},
 }
+```
+
+### Phase 4: Post-Processing Results
+
+```bash
+# Aggregate all measurement results
+python3 generate_perfenergy.py
+
+# Or process specific case only
+python3 generate_perfenergy.py case1
+```
+
+**What happens:**
+
+**Step 1: Parse Raw Outputs**
+- Reads `kernel_outputs/case{N}/powercap{1-5}/output_kernel{K}.txt`
+- Extracts metrics using regex:
+  - `GFLOP/s: X.XX` → Performance
+  - `Mean energy per iteration: X.XX mJ` → Energy
+  - `Mean time per iteration: X.XX ms` → Execution time
+- Calculates **EDP (Energy-Delay Product)** = `exec_time(ms) × energy(mJ)`
+- Outputs: `powercap{1-5}/results.csv` with columns:
+  ```csv
+  id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)
+  1,1234,15.67,1.92876600
+  ```
+
+**Step 2: Generate Combined Data**
+- Reads all 5 `results.csv` files (including EDP values)
+- Generates `all.csv` - Combined raw data from all power caps:
+  ```csv
+  id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ),perf(GFLOP/s),energy(mJ),EDP(ms*mJ),...
+     [powercap1]                          [powercap2]
+  ```
+- Total columns: 1 (id) + 3 × 5 (perf/energy/EDP for each powercap) = 16 columns
+
+**Output Structure:**
+```
+kernel_outputs/case1/
+├── powercap1/
+│   ├── output_kernel1.txt    (raw input)
+│   └── results.csv           (parsed)
+├── powercap2/results.csv
+├── ...
+├── powercap5/results.csv
+└── all.csv                   (combined)
 ```
 
 ## Key Functions and Logic

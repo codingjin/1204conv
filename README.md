@@ -9,6 +9,7 @@ This project provides:
 - **Energy Measurement**: Per-kernel energy consumption across 5 power cap settings
 - **Multi-GPU Support**: Automatic GPU configuration for consistent results
 - **Unattended Execution**: Passwordless sudo setup for long-running benchmarks
+- **Result Analysis**: Automated post-processing with EDP (Energy-Delay Product) calculation
 
 ## Prerequisites
 
@@ -104,12 +105,35 @@ bash scripts/case1/run_kernel1_powercap3.sh
 
 **Output**: Raw measurement logs in `kernel_outputs/{case_id}/powercap{1-5}/output_kernel{N}.txt`
 
+### 5. Post-Process Results
+
+Aggregate and analyze the measurement results:
+
+```bash
+# Process all cases
+python3 generate_perfenergy.py
+
+# Process specific case only
+python3 generate_perfenergy.py case1
+```
+
+**What it does:**
+1. Parses raw `output_kernel*.txt` files to extract GFLOP/s, energy (mJ), and execution time (ms)
+2. Calculates EDP (Energy-Delay Product) = exec_time × energy
+3. Generates `results.csv` files per power cap with columns: `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
+4. Combines all power caps into `all.csv` with 16 columns: `id` + (perf, energy, EDP) × 5 power caps
+
+**Output**:
+- `kernel_outputs/case{N}/powercap{1-5}/results.csv` - Parsed metrics per power cap
+- `kernel_outputs/case{N}/all.csv` - Combined data from all 5 power caps
+
 ## Project Structure
 
 ```
 .
 ├── conv_tuning.py              # TVM auto-scheduler for Conv2D
 ├── genkernels.py               # CUDA kernel generator
+├── generate_perfenergy.py      # Post-processing and aggregation script
 ├── gpu_setup.py                # GPU power cap configuration (for measurement)
 ├── tuning_gpu_setup.sh         # GPU setup for TVM tuning (run first!)
 ├── setup_passwordless_sudo.sh  # Standalone passwordless sudo setup
@@ -187,6 +211,32 @@ bash run_all.sh
 - GPU-specific power caps (5 levels per GPU type)
 - Examples: RTX 3090: [100W, 200W, 300W, 420W, 450W]
 
+### Phase 4: Post-Processing
+
+```bash
+# Process all cases
+python3 generate_perfenergy.py
+
+# Or process specific case
+python3 generate_perfenergy.py case1
+```
+
+**What happens:**
+1. **Step 1: Parse Raw Outputs**
+   - Reads `kernel_outputs/case{N}/powercap{1-5}/output_kernel{K}.txt`
+   - Extracts GFLOP/s, energy (mJ), and execution time (ms) using regex
+   - Calculates EDP (Energy-Delay Product) = exec_time × energy
+   - Generates `results.csv` per power cap with columns: `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
+
+2. **Step 2: Generate Combined Data**
+   - Reads all 5 `results.csv` files
+   - Combines into `all.csv` with 16 columns: `id` + (perf, energy, EDP) × 5 power caps
+   - Each row contains complete data for one kernel across all power cap settings
+
+**Output:**
+- `kernel_outputs/case{N}/powercap{1-5}/results.csv` - Parsed metrics per power cap
+- `kernel_outputs/case{N}/all.csv` - Combined data from all 5 power caps
+
 ## Scripts Reference
 
 ### Setup Scripts
@@ -203,6 +253,7 @@ bash run_all.sh
 |--------|---------|---------|
 | `conv_tuning.py` | TVM auto-scheduler | `--test`, `--ntrials N`, `--output_dir DIR` |
 | `genkernels.py` | Generate CUDA kernels | `--test`, `--input_dir DIR` |
+| `generate_perfenergy.py` | Post-process results | `[case_id]` (optional, process specific case) |
 | `clean.sh` | Remove generated files | None (interactive) |
 
 ### Test Mode Comparison
@@ -258,13 +309,16 @@ kernel_outputs/case{N}/
 ├── powercap1/
 │   ├── output_kernel1.txt         # Raw measurement output
 │   ├── output_kernel2.txt
-│   └── ...
-├── powercap2/
-├── ...
-└── powercap5/
+│   ├── ...
+│   └── results.csv                # Parsed metrics (id,perf,energy,EDP)
+├── powercap2/results.csv
+├── powercap3/results.csv
+├── powercap4/results.csv
+├── powercap5/results.csv
+└── all.csv                        # Combined data from all power caps
 ```
 
-**Output file format** (example):
+**Raw output file format** (example):
 ```
 [Per-Iteration Performance]
   GFLOP/s: 1234.56
