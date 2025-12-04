@@ -119,13 +119,13 @@ python3 generate_perfenergy.py case1
 
 **What it does:**
 1. Parses raw `output_kernel*.txt` files to extract GFLOP/s, energy (mJ), and execution time (ms)
-2. Calculates EDP (Energy-Delay Product) = exec_time × energy
-3. Generates `results.csv` files per power cap with columns: `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
-4. Combines all power caps into `all.csv` with 16 columns: `id` + (perf, energy, EDP) × 5 power caps
+2. Calculates EDP (Energy-Delay Product) = exec_time × energy, rounds to integer
+3. Generates `results.csv` files per power cap with columns (all integers): `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
+4. Combines all power caps into `all.csv` with 16 columns: `id` + (perf, energy, EDP) × 5 power caps (all integers)
 
 **Output**:
-- `kernel_outputs/case{N}/powercap{1-5}/results.csv` - Parsed metrics per power cap
-- `kernel_outputs/case{N}/all.csv` - Combined data from all 5 power caps
+- `kernel_outputs/case{N}/powercap{1-5}/results.csv` - Parsed metrics per power cap (integers)
+- `kernel_outputs/case{N}/all.csv` - Combined data from all 5 power caps (integers)
 
 ## Project Structure
 
@@ -225,17 +225,17 @@ python3 generate_perfenergy.py case1
 1. **Step 1: Parse Raw Outputs**
    - Reads `kernel_outputs/case{N}/powercap{1-5}/output_kernel{K}.txt`
    - Extracts GFLOP/s, energy (mJ), and execution time (ms) using regex
-   - Calculates EDP (Energy-Delay Product) = exec_time × energy
-   - Generates `results.csv` per power cap with columns: `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
+   - Calculates EDP (Energy-Delay Product) = exec_time × energy, rounds to integer
+   - Generates `results.csv` per power cap with columns (all integers): `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
 
 2. **Step 2: Generate Combined Data**
    - Reads all 5 `results.csv` files
-   - Combines into `all.csv` with 16 columns: `id` + (perf, energy, EDP) × 5 power caps
+   - Combines into `all.csv` with 16 columns: `id` + (perf, energy, EDP) × 5 power caps (all integers)
    - Each row contains complete data for one kernel across all power cap settings
 
 **Output:**
-- `kernel_outputs/case{N}/powercap{1-5}/results.csv` - Parsed metrics per power cap
-- `kernel_outputs/case{N}/all.csv` - Combined data from all 5 power caps
+- `kernel_outputs/case{N}/powercap{1-5}/results.csv` - Parsed metrics per power cap (integers)
+- `kernel_outputs/case{N}/all.csv` - Combined data from all 5 power caps (integers)
 
 ## Scripts Reference
 

@@ -125,12 +125,12 @@ def write_results_csv(powercap_dir, results):
         for kernel_id, gflops, energy_mj, exec_time_ms in results:
             # Round GFLOP/s to integer
             perf_int = round(gflops)
-            # Format energy to 2 decimal places
-            energy_formatted = round(energy_mj, 2)
-            # Calculate EDP (Energy-Delay Product) = exec_time(ms) * energy(mJ)
-            edp = exec_time_ms * energy_mj
+            # Round energy to integer
+            energy_int = round(energy_mj)
+            # Calculate EDP (Energy-Delay Product) = exec_time(ms) * energy(mJ), round to integer
+            edp_int = round(exec_time_ms * energy_mj)
 
-            writer.writerow([kernel_id, perf_int, energy_formatted, edp])
+            writer.writerow([kernel_id, perf_int, energy_int, edp_int])
 
     print(f"  ✓ Created {csv_path} ({len(results)} kernels)")
 
@@ -191,9 +191,9 @@ def generate_all_csv(case_path, powercap_data, kernel_ids):
             for pc in range(1, 6):
                 if kernel_id in powercap_data[pc]:
                     perf, energy, edp = powercap_data[pc][kernel_id]
-                    row.append(f"{perf:.0f}")  # Round to integer
-                    row.append(f"{energy:.2f}")  # 2 decimal places
-                    row.append(edp)  # Raw EDP value
+                    row.append(f"{perf:.0f}")  # Integer
+                    row.append(f"{energy:.0f}")  # Integer
+                    row.append(f"{edp:.0f}")  # Integer
                 else:
                     row.append("N/A")
                     row.append("N/A")

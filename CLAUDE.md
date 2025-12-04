@@ -190,19 +190,20 @@ python3 generate_perfenergy.py case1
   - `GFLOP/s: X.XX` → Performance
   - `Mean energy per iteration: X.XX mJ` → Energy
   - `Mean time per iteration: X.XX ms` → Execution time
-- Calculates **EDP (Energy-Delay Product)** = `exec_time(ms) × energy(mJ)`
-- Outputs: `powercap{1-5}/results.csv` with columns:
+- Calculates **EDP (Energy-Delay Product)** = `exec_time(ms) × energy(mJ)`, rounded to integer
+- Outputs: `powercap{1-5}/results.csv` with columns (all values as integers):
   ```csv
   id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)
-  1,1234,15.67,1.92876600
+  1,1234,16,19
   ```
 
 **Step 2: Generate Combined Data**
 - Reads all 5 `results.csv` files (including EDP values)
-- Generates `all.csv` - Combined raw data from all power caps:
+- Generates `all.csv` - Combined raw data from all power caps (all values as integers):
   ```csv
   id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ),perf(GFLOP/s),energy(mJ),EDP(ms*mJ),...
      [powercap1]                          [powercap2]
+  1,1234,16,19,1200,18,22,...
   ```
 - Total columns: 1 (id) + 3 × 5 (perf/energy/EDP for each powercap) = 16 columns
 
@@ -399,3 +400,4 @@ Does NOT remove: tuningresults/, tuningrecords/, source code.
 - **Why disable extra GPUs?** Ensures consistent tuning results on multi-GPU systems (TVM uses all visible GPUs by default)
 - **Why 5 power caps?** Provides energy/performance trade-off curve from low power to maximum performance
 - **Why lrounds?** Multiple measurement rounds reduce noise in energy readings (GPU power fluctuates)
+- to memorize
