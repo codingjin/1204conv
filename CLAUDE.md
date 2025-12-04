@@ -4,90 +4,348 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a TVM-based Conv2D auto-scheduler for CUDA GPUs. It tunes convolution operations from ResNet and YOLO architectures using TVM's auto-scheduler to find optimal GPU kernel configurations.
+This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. It:
+1. Tunes Conv2D kernels using TVM auto-scheduler
+2. Generates executable CUDA kernels
+3. Measures energy consumption across different GPU power caps
 
-## Running the Code
+## Project Structure
 
-### Basic Usage
+### Core Scripts
 
-```bash
-# Run with defaults (both ResNet and YOLO, all problem sizes, 1000 trials)
-python conv_tuning.py
+**Tuning Phase:**
+- `conv_tuning.py` - TVM auto-scheduler for Conv2D kernels
+- `tuning_gpu_setup.sh` - GPU setup (must run before tuning)
 
-# Custom number of trials
-python conv_tuning.py --ntrials 2000
+**Kernel Generation:**
+- `genkernels.py` - Generates CUDA kernels from tuning results
+- `demo.cu` - Kernel wrapper template
+- `main.cpp` - Energy measurement driver
 
-# Test specific problem size (layer index)
-python conv_tuning.py --specify_pz 5
+**GPU Management:**
+- `gpu_setup.py` - Sets GPU power caps (for measurement)
+- `setup_passwordless_sudo.sh` - Configures passwordless sudo
 
-# Custom output directory
-python conv_tuning.py --output_dir my_results
+**Utilities:**
+- `clean.sh` - Removes all generated files
+
+### Directory Structure
+
+```
+Source files (version controlled):
+  conv_tuning.py, genkernels.py, gpu_setup.py, demo.cu, main.cpp
+  tuning_gpu_setup.sh, setup_passwordless_sudo.sh, clean.sh
+  README.md, CLAUDE.md
+
+Generated files (NOT version controlled):
+  tuningrecords/     - Raw TVM tuning logs
+  tuningresults/     - Filtered tuning results (25 or 2 kernels)
+  kernels/           - Generated CUDA kernel code
+  kernel_outputs/    - Energy measurement results
+  build/             - Compiled binaries
+  scripts/           - Generated run scripts
+  run_all.sh         - Master run script
+  run_layer_*.sh     - Per-case run scripts
 ```
 
-### Requirements
+## Complete Workflow
 
-- TVM installation (set `TVM_HOME` environment variable)
-- PyTorch (for GPU capability detection)
-- CUDA-capable GPU
-- Python packages: `tvm`, `numpy`, `torch`
+### Phase 1: TVM Tuning
 
-## Architecture
+**REQUIRED FIRST STEP:**
+```bash
+bash tuning_gpu_setup.sh
+```
+This sets up passwordless sudo, persistent mode, and disables extra GPUs.
 
-### Main Workflow
+**Run tuning:**
+```bash
+# Full tuning: 7 cases, 1000 trials each, keep 25 kernels
+python conv_tuning.py
 
-The script follows this pipeline:
+# Test mode: 2 cases (first+last), 100 trials, keep 2 kernels (Top1+Top2)
+python conv_tuning.py --test
+```
 
-1. **Tuning Phase** (`conv2d_tuning`): Auto-scheduler explores kernel configurations
-   - Runs trials for each Conv2D layer configuration
-   - Generates raw JSON logs with execution times
-   - Validates correctness against reference implementation
-   - Outputs to `{output_dir}/*.json` with CSV metadata
+**Conv2D Configurations** (conv_tuning.py:26-34):
+```python
+conv_configs = [
+    [1, 272, 272, 64, 32, 3, 3, 1, 1],    # case1
+    [1, 68, 68, 256, 128, 3, 3, 1, 1],    # case2
+    [1, 34, 34, 512, 256, 3, 3, 1, 1],    # case3
+    [1, 17, 17, 1024, 512, 3, 3, 1, 1],   # case4
+    [1, 56, 56, 64, 64, 3, 3, 1, 1],      # case5
+    [1, 28, 28, 128, 128, 3, 3, 1, 1],    # case6
+    [1, 14, 14, 256, 256, 3, 3, 1, 1],    # case7
+]
+```
+Format: `[N, H, W, CO, CI, KH, KW, stride, padding]`
 
-2. **Sorting Phase** (`sort_all_results`): Reduces dataset for representative samples
-   - Backs up raw results to `{output_dir}.bak/`
-   - Selects 25 representative configurations using percentile-based sampling
-   - Overwrites `{output_dir}/*.json` with sorted, filtered results
+**Filtering Logic** (conv_tuning.py:98-196):
+1. Filters out "out-of-time" records (exec_time >= 1e10)
+2. Sorts by execution time (ascending = fastest first)
+3. Selects representatives:
+   - **Test mode**: Top1 (fastest) + Top2 (2nd fastest)
+   - **Normal mode**: 25 kernels (Top5 at 0%, 10%, 25%, 50%, 75% percentiles)
 
-3. **Performance Analysis** (`calculate_performance_metrics`): Converts timings to GFLOPS/s
-   - Parses Conv2D parameters from filenames
-   - Calculates FLOPs for each configuration
-   - Outputs integer GFLOPS/s values to `performance/*.json`
+**Output Files:**
+- `tuningrecords/case{N}_*.json` - Raw tuning logs (ntrials records)
+- `tuningrecords/case{N}_*.csv` - Metadata with start_time
+- `tuningresults/case{N}_*.json` - Filtered results (2 or 25 kernels)
 
-### Key Components
+**File Naming:**
+```
+case{N}_conv2d_N_{N}_H_{H}_W_{W}_CO_{CO}_CI_{CI}_KH_{KH}_KW_{KW}_strides_{strides}_padding_{padding}.json
+```
 
-**Problem Sizes**: Defined in `sizesResnet` (lines 30-44) and `sizesYolo` (lines 46-57)
-- Format: `[N, H, W, CO, CI, KH, KW, stride, padding]`
-- Most layers commented out by default (only a few active for testing)
+### Phase 2: Kernel Generation
 
-**GPU Detection**: `get_gpu_sm()` (lines 16-25) detects compute capability
-- Returns format like `sm_86` for targeted compilation
-- Used globally at line 27 for `tvm.target.cuda()`
+```bash
+# Generate with full measurement (3 lrounds)
+python genkernels.py
 
-**File Naming Convention**:
-- Format: `cuda_{network}_testCase_{index}_conv2d_N_{N}_H_{H}_W_{W}_CO_{CO}_CI_{CI}_KH_{KH}_KW_{KW}_strides_{strides}_padding_{padding}.json`
-- Parsing regex at line 346 for extracting parameters
+# Test mode (1 lround for faster validation)
+python genkernels.py --test
 
-### Representative Sampling Strategy
+# Custom input directory
+python genkernels.py --input_dir configs
+```
 
-The `sort_json_file` function (lines 248-311) selects 25 records from all trials:
-- Top 5 fastest (positions 0-4)
-- 5 records at 10th percentile
-- 5 records at 25th percentile
-- 5 records at 50th percentile
-- 5 records at 75th percentile
+**What it does:**
+1. Reads filtered tuning results from `tuningresults/` (default)
+2. For each configuration, generates:
+   - `.cuh` file - CUDA kernel header
+   - `.cu` file - Kernel wrapper
+   - 5 run scripts (one per power cap)
+3. Filters out invalid configs (exec_time >= 1e9)
+4. Generates master scripts and CMakeLists.txt
 
-This provides performance distribution insight while reducing dataset size.
+**Measurement Configuration:**
+- **Normal mode**: 3 lrounds × (100 iterations × 1000 rounds) = 300,000 executions
+- **Test mode**: 1 lround × (100 iterations × 1000 rounds) = 100,000 executions
+- Energy measured once per lround
 
-## Modifying Problem Sizes
+**Output Structure:**
+```
+kernels/case{N}/kernel{K}.cuh        - Kernel code
+kernels/case{N}/kernel{K}.cu         - Wrapper
+scripts/case{N}/run_kernel{K}_powercap{P}.sh  - Individual run scripts
+run_layer_case{N}.sh                 - Run all kernels for case{N}
+run_all.sh                           - Master script (all cases)
+kernel_metadata.csv                  - Kernel metadata
+CMakeLists.txt                       - Build configuration
+```
 
-To enable/disable Conv2D layers:
-1. Edit `sizesResnet` or `sizesYolo` arrays
-2. Uncomment/comment layer configurations
-3. Use `--specify_pz INDEX` to test individual layers during development
+### Phase 3: Energy Measurement
 
-## Output Files
+```bash
+# Run all measurements (automatic passwordless sudo setup)
+bash run_all.sh
 
-- `{output_dir}/*.json`: Sorted tuning results (25 records per layer)
-- `{output_dir}.bak/*.json`: Full raw tuning results (ntrials records per layer)
-- `{output_dir}/*.csv`: Metadata with `start_time` timestamp
-- `performance/*.json`: GFLOPS/s values (one integer per line)
+# Run specific case
+bash run_layer_case1.sh
+
+# Run specific kernel with specific power cap
+bash scripts/case1/run_kernel1_powercap3.sh
+```
+
+**What happens:**
+1. Checks/sets up passwordless sudo
+2. For each kernel × power cap:
+   - Calls `gpu_setup.py {power_cap_index}` to configure GPU
+   - Compiles kernel if needed
+   - Runs kernel with energy measurement
+   - Saves output to `kernel_outputs/case{N}/powercap{P}/output_kernel{K}.txt`
+
+**GPU Power Caps** (gpu_setup.py:12-33):
+```python
+GPU_CONFIGS = {
+    'NVIDIA GeForce RTX 3090': {'power_caps': [100, 200, 300, 420, 450]},
+    'NVIDIA GeForce RTX 4090': {'power_caps': [150, 200, 300, 400, 450]},
+    'Tesla V100-SXM2-16GB': {'power_caps': [100, 150, 200, 250, 300]},
+    'NVIDIA A30': {'power_caps': [100, 120, 140, 160, 165]},
+    'NVIDIA A100': {'power_caps': [100, 200, 300, 400, 450]},
+}
+```
+
+## Key Functions and Logic
+
+### conv_tuning.py
+
+**`filter_tuning_results()`** (lines 98-196):
+- Reads raw tuning results
+- Filters out failed tuning attempts (exec_time >= 1e10)
+- Sorts by execution time (ascending)
+- Selects representative kernels based on mode
+
+**`conv2d_tuning()`** (lines 197-331):
+- Main tuning loop
+- Handles test mode configuration selection
+- Applies filtering after tuning
+- Skips if tuning already complete (checks line count)
+
+**Test Mode Behavior** (lines 154-158, 220-223):
+- Configurations: First and last (case1, case7)
+- Trials: 100 (overridden from default 1000)
+- Filtering: Keep Top1 and Top2 only
+
+### genkernels.py
+
+**Kernel Generation Loop** (lines 148-384):
+- Extracts layer name from filename: `case{N}`
+- Filters invalid configs: `exec_time >= 1e9`
+- Generates kernel code from TVM tuning result
+- Creates 5 run scripts per kernel (one per power cap)
+- Stores metadata for CMakeLists.txt generation
+
+**Grid/Block Calculation** (lines 268-285):
+- Extracts from TVM schedule (SP node with 4 dimensions)
+- Falls back to defaults if extraction fails: grid=1, block=256
+
+**Test Mode** (lines 72-77):
+- `num_lrounds = 1` (vs 3 in normal mode)
+- Affects only measurement duration, not kernel code
+
+### gpu_setup.py
+
+**GPU Detection** (lines 45-66):
+- Uses `nvidia-smi --query-gpu=name`
+- Matches against `GPU_CONFIGS` dictionary
+- Falls back to error if GPU not supported
+
+**Power Cap Setting** (lines 108-119):
+- Uses `sudo nvidia-smi -i 0 -pl {watts}`
+- Applies to GPU 0 only
+- Validates setting with query
+
+**Multi-GPU Handling** (lines 87-106):
+- Disables GPUs 1-N using drain or compute mode prohibited
+- Ensures only GPU 0 is used for consistent measurements
+
+## Command Reference
+
+### conv_tuning.py
+
+```bash
+python conv_tuning.py [OPTIONS]
+
+Options:
+  --test              Test mode (2 cases, 100 trials, keep Top1+Top2)
+  --ntrials N         Number of trials per case (default: 1000)
+  --specify_pz N      Test specific case index (0-6)
+  --output_dir DIR    Output directory (default: tuningresults)
+```
+
+### genkernels.py
+
+```bash
+python genkernels.py [OPTIONS]
+
+Options:
+  --test              Test mode (1 lround instead of 3)
+  --input_dir DIR     Input directory (default: tuningresults)
+```
+
+### gpu_setup.py
+
+```bash
+python gpu_setup.py <1-5>        # Set power cap (1=lowest, 5=highest)
+python gpu_setup.py --detect     # Detect GPU and show config
+```
+
+## Test Mode vs Normal Mode
+
+| Aspect | Normal Mode | Test Mode |
+|--------|-------------|-----------|
+| **conv_tuning.py** | | |
+| Cases | All 7 | First + last (case1, case7) |
+| Trials per case | 1000 | 100 |
+| Kernels kept | 25 (percentile-based) | 2 (Top1 + Top2) |
+| Time estimate | 2-4 hours | 15-30 minutes |
+| **genkernels.py** | | |
+| Lrounds | 3 | 1 |
+| Executions | 300,000 | 100,000 |
+| Measurement time | Full | ~3× faster |
+| **Generated kernels** | | |
+| CUDA code | Identical | Identical |
+
+## Modifying the Code
+
+### Adding a New Conv2D Configuration
+
+Edit `conv_configs` in `conv_tuning.py`:
+```python
+conv_configs = [
+    [1, 272, 272, 64, 32, 3, 3, 1, 1],  # case1
+    # ... existing configs ...
+    [1, YOUR_H, YOUR_W, YOUR_CO, YOUR_CI, YOUR_KH, YOUR_KW, YOUR_STRIDE, YOUR_PAD],  # case8
+]
+```
+
+The script automatically handles case numbering based on array position.
+
+### Adding a New GPU
+
+Edit `GPU_CONFIGS` in `gpu_setup.py`:
+```python
+GPU_CONFIGS = {
+    'Full GPU Name from nvidia-smi': {
+        'name': 'ShortName',
+        'power_caps': [cap1, cap2, cap3, cap4, cap5],  # Watts
+    },
+}
+```
+
+Run `nvidia-smi --query-gpu=name --format=csv,noheader -i 0` to get exact name.
+
+### Changing Filtering Strategy
+
+Edit `filter_tuning_results()` in `conv_tuning.py`:
+- Test mode filtering: lines 154-158
+- Normal mode filtering: lines 160-183
+- Adjust percentiles or count as needed
+
+## Common Issues
+
+### "Directory tuningresults/ not found"
+- Run `conv_tuning.py` first to generate tuning results
+- Or specify correct directory: `python genkernels.py --input_dir configs`
+
+### "GPU not in supported list"
+- Add GPU to `GPU_CONFIGS` in `gpu_setup.py`
+- Or run `python gpu_setup.py --detect` to see detected name
+
+### "Permission denied" when running scripts
+- Make scripts executable: `chmod +x script.sh`
+- Or run with bash: `bash script.sh`
+
+### "nvidia-smi requires password"
+- Run `bash tuning_gpu_setup.sh` before tuning
+- Or run `bash setup_passwordless_sudo.sh` manually
+
+## Clean Up
+
+Remove all generated files:
+```bash
+bash clean.sh
+```
+
+This removes: kernels/, kernel_outputs/, build/, scripts/, metadata files, run scripts.
+Does NOT remove: tuningresults/, tuningrecords/, source code.
+
+## Requirements
+
+- Python 3.7+
+- TVM with CUDA support (set `TVM_HOME` environment variable)
+- NVIDIA CUDA Toolkit
+- PyTorch (for GPU detection in tuning)
+- nvidia-ml-py3 (for energy measurement)
+- NVIDIA GPU with compute capability >= 7.0
+
+## Architecture Notes
+
+- **Why two filtering modes?** Test mode (2 kernels) for quick validation, normal mode (25 kernels) for comprehensive performance analysis
+- **Why separate tuningrecords/ and tuningresults/?** Keep raw data (tuningrecords/) separate from filtered data (tuningresults/) for reproducibility
+- **Why disable extra GPUs?** Ensures consistent tuning results on multi-GPU systems (TVM uses all visible GPUs by default)
+- **Why 5 power caps?** Provides energy/performance trade-off curve from low power to maximum performance
+- **Why lrounds?** Multiple measurement rounds reduce noise in energy readings (GPU power fluctuates)
