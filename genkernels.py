@@ -61,7 +61,7 @@ target = tvm.target.Target("cuda")
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Generate CUDA kernels from TVM tuning results and measure energy consumption')
-parser.add_argument('--test', action='store_true', help='Use test mode (3 lrounds for rapid validation)')
+parser.add_argument('--test', action='store_true', help='Use test mode (1 lround for rapid validation)')
 parser.add_argument('--input_dir', type=str, default='tuningresults',
                     help='Directory containing tuning result JSON files (default: tuningresults)')
 args = parser.parse_args()

@@ -18,10 +18,10 @@ void conv_kernel_energy_wrapper(int N_B, int N_C, int N_H, int N_W, int N_F, int
                         // Fixed measurement parameters
                         const int ITERATIONS_PER_ROUND = 100;
                         const int ROUNDS_PER_LROUND = 1000;
-                        const int NUM_LROUNDS = num_lrounds;  // From command-line argument (3 or 10)
+                        const int NUM_LROUNDS = num_lrounds;  // From command-line argument (1 or 3)
                         const int executions_per_lround = ROUNDS_PER_LROUND * ITERATIONS_PER_ROUND;  // 100,000
                         const int total_executions = NUM_LROUNDS * executions_per_lround;
-                        const char* mode_name = (NUM_LROUNDS == 3) ? "TEST" : "DEFAULT";
+                        const char* mode_name = (NUM_LROUNDS == 1) ? "TEST" : "DEFAULT";
 
                         // Calculate sizes for single iteration
                         size_t input_size_per_iter = sizeof(float) * N_B * N_C * N_H * N_W;

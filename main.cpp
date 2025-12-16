@@ -31,8 +31,8 @@ int main(int argc, char *argv[]) {
     size_t output_size = (size_t)N_B * N_F * N_Y * N_X * itr;
     Output = (TYPE *) malloc(sizeof(TYPE) * output_size);
 
-    // Performance measurement: use 100 rounds for test mode (3 lrounds), 1000 rounds for default (10 lrounds)
-    int num_perf_rounds = (num_lrounds == 3) ? 100 : 1000;
+    // Performance measurement: use 100 rounds for test mode (1 lround), 1000 rounds for default (3 lrounds)
+    int num_perf_rounds = (num_lrounds == 1) ? 100 : 1000;
 
     printf("\n========================================\n");
     printf("  STARTING PERFORMANCE MEASUREMENT\n");
