@@ -61,6 +61,9 @@ python conv_tuning.py
 # Test mode (first and last configurations, 100 trials, keep Top1+Top2)
 python conv_tuning.py --test
 
+# Tune specific case only (e.g., case8 = index 7, 0-based)
+python conv_tuning.py --specify_pz 7
+
 # Custom configuration
 python conv_tuning.py --ntrials 2000 --output_dir my_results
 ```
@@ -162,8 +165,14 @@ bash tuning_gpu_setup.sh
 
 **Run tuning:**
 ```bash
-python conv_tuning.py [--test] [--ntrials N] [--output_dir DIR]
+python conv_tuning.py [--test] [--ntrials N] [--specify_pz INDEX] [--output_dir DIR]
 ```
+
+**Options:**
+- `--test`: Test mode (2 cases, 100 trials, keep Top1+Top2)
+- `--ntrials N`: Number of trials per case (default: 1000)
+- `--specify_pz INDEX`: Tune specific case only (0-based index, e.g., 7 for case8)
+- `--output_dir DIR`: Output directory (default: tuningresults)
 
 **What happens:**
 1. Tunes Conv2D kernels using TVM auto-scheduler
@@ -173,9 +182,10 @@ python conv_tuning.py [--test] [--ntrials N] [--output_dir DIR]
 3. Saves filtered results to `tuningresults/case{N}_*.json`
 
 **Conv2D Configurations:**
-- 8 configurations covering typical CNN layers
+- 8 configurations covering typical CNN layers (case1 through case8)
 - Format: `[N, H, W, CO, CI, KH, KW, stride, padding]`
 - Examples: 272×272×64, 68×68×256, 34×34×512, 7×7×512, etc.
+- **Note**: Use 0-based index with `--specify_pz` (0=case1, 1=case2, ..., 7=case8)
 
 ### Phase 2: Kernel Generation
 
@@ -251,7 +261,7 @@ python3 generate_perfenergy.py case1
 
 | Script | Purpose | Options |
 |--------|---------|---------|
-| `conv_tuning.py` | TVM auto-scheduler | `--test`, `--ntrials N`, `--output_dir DIR` |
+| `conv_tuning.py` | TVM auto-scheduler | `--test`, `--ntrials N`, `--specify_pz INDEX`, `--output_dir DIR` |
 | `genkernels.py` | Generate CUDA kernels | `--test`, `--input_dir DIR` |
 | `generate_perfenergy.py` | Post-process results | `[case_id]` (optional, process specific case) |
 | `clean.sh` | Remove generated files | None (interactive) |
