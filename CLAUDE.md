@@ -64,14 +64,14 @@ This sets up passwordless sudo, persistent mode, and disables extra GPUs.
 
 **Run tuning:**
 ```bash
-# Full tuning: 7 cases, 1000 trials each, keep 25 kernels
+# Full tuning: 8 cases, 1000 trials each, keep 25 kernels
 python conv_tuning.py
 
 # Test mode: 2 cases (first+last), 100 trials, keep 2 kernels (Top1+Top2)
 python conv_tuning.py --test
 ```
 
-**Conv2D Configurations** (conv_tuning.py:26-34):
+**Conv2D Configurations** (conv_tuning.py:26-35):
 ```python
 conv_configs = [
     [1, 272, 272, 64, 32, 3, 3, 1, 1],    # case1
@@ -81,6 +81,7 @@ conv_configs = [
     [1, 56, 56, 64, 64, 3, 3, 1, 1],      # case5
     [1, 28, 28, 128, 128, 3, 3, 1, 1],    # case6
     [1, 14, 14, 256, 256, 3, 3, 1, 1],    # case7
+    [1, 7, 7, 512, 512, 3, 3, 1, 1],      # case8
 ]
 ```
 Format: `[N, H, W, CO, CI, KH, KW, stride, padding]`
@@ -168,7 +169,7 @@ GPU_CONFIGS = {
     'NVIDIA GeForce RTX 4090': {'power_caps': [150, 200, 300, 400, 450]},
     'Tesla V100-SXM2-16GB': {'power_caps': [100, 150, 200, 250, 300]},
     'NVIDIA A30': {'power_caps': [100, 120, 140, 160, 165]},
-    'NVIDIA A100': {'power_caps': [100, 200, 300, 400, 450]},
+    'NVIDIA A100': {'power_caps': [100, 200, 250, 300, 400]},
 }
 ```
 
@@ -236,7 +237,7 @@ kernel_outputs/case1/
 - Skips if tuning already complete (checks line count)
 
 **Test Mode Behavior** (lines 154-158, 220-223):
-- Configurations: First and last (case1, case7)
+- Configurations: First and last (case1, case8)
 - Trials: 100 (overridden from default 1000)
 - Filtering: Keep Top1 and Top2 only
 
@@ -283,7 +284,7 @@ python conv_tuning.py [OPTIONS]
 Options:
   --test              Test mode (2 cases, 100 trials, keep Top1+Top2)
   --ntrials N         Number of trials per case (default: 1000)
-  --specify_pz N      Test specific case index (0-6)
+  --specify_pz N      Test specific case index (0-7)
   --output_dir DIR    Output directory (default: tuningresults)
 ```
 
@@ -309,7 +310,7 @@ python gpu_setup.py --detect     # Detect GPU and show config
 | Aspect | Normal Mode | Test Mode |
 |--------|-------------|-----------|
 | **conv_tuning.py** | | |
-| Cases | All 7 | First + last (case1, case7) |
+| Cases | All 8 | First + last (case1, case8) |
 | Trials per case | 1000 | 100 |
 | Kernels kept | 25 (percentile-based) | 2 (Top1 + Top2) |
 | Time estimate | 2-4 hours | 15-30 minutes |
@@ -329,7 +330,8 @@ Edit `conv_configs` in `conv_tuning.py`:
 conv_configs = [
     [1, 272, 272, 64, 32, 3, 3, 1, 1],  # case1
     # ... existing configs ...
-    [1, YOUR_H, YOUR_W, YOUR_CO, YOUR_CI, YOUR_KH, YOUR_KW, YOUR_STRIDE, YOUR_PAD],  # case8
+    [1, 7, 7, 512, 512, 3, 3, 1, 1],    # case8
+    [1, YOUR_H, YOUR_W, YOUR_CO, YOUR_CI, YOUR_KH, YOUR_KW, YOUR_STRIDE, YOUR_PAD],  # case9
 ]
 ```
 

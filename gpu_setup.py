@@ -28,7 +28,7 @@ GPU_CONFIGS = {
     },
     'NVIDIA A100': {
         'name': 'A100',
-        'power_caps': [100, 200, 300, 400, 450],  # Watts
+        'power_caps': [100, 200, 250, 300, 400],  # Watts
     },
 }
 

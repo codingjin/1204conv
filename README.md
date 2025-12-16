@@ -55,7 +55,7 @@ This script:
 Generate optimized Conv2D kernels using TVM auto-scheduler:
 
 ```bash
-# Full tuning (all 7 configurations, 1000 trials each)
+# Full tuning (all 8 configurations, 1000 trials each)
 python conv_tuning.py
 
 # Test mode (first and last configurations, 100 trials, keep Top1+Top2)
@@ -173,9 +173,9 @@ python conv_tuning.py [--test] [--ntrials N] [--output_dir DIR]
 3. Saves filtered results to `tuningresults/case{N}_*.json`
 
 **Conv2D Configurations:**
-- 7 configurations covering typical CNN layers
+- 8 configurations covering typical CNN layers
 - Format: `[N, H, W, CO, CI, KH, KW, stride, padding]`
-- Examples: 272×272×64, 68×68×256, 34×34×512, etc.
+- Examples: 272×272×64, 68×68×256, 34×34×512, 7×7×512, etc.
 
 ### Phase 2: Kernel Generation
 
@@ -261,7 +261,7 @@ python3 generate_perfenergy.py case1
 | Aspect | Normal Mode | Test Mode |
 |--------|-------------|-----------|
 | **conv_tuning.py** | | |
-| Configurations | All 7 cases | First + last (case1, case7) |
+| Configurations | All 8 cases | First + last (case1, case8) |
 | Trials per config | 1000 | 100 |
 | Kernels kept | 25 (percentile-based) | 2 (Top1 + Top2) |
 | **genkernels.py** | | |
@@ -337,7 +337,7 @@ The project auto-detects and configures the following GPUs:
 | RTX 4090 | 150, 200, 300, 400, 450 |
 | V100 | 100, 150, 200, 250, 300 |
 | A30 | 100, 120, 140, 160, 165 |
-| A100 | 100, 200, 300, 400, 450 |
+| A100 | 100, 200, 250, 300, 400 |
 
 **To add a new GPU:**
 Edit `gpu_setup.py` and add entry to `GPU_CONFIGS` dictionary.
