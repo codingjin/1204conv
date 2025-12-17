@@ -525,7 +525,7 @@ If you use this code in your research, please cite:
 ```bibtex
 @software{tvm_conv2d_energy_2025,
   title={TVM Conv2D Auto-Scheduler with Energy Measurement},
-  author={Jin},
+  author={Jin Huang},
   year={2025},
   url={https://github.com/codingjin/1204conv},
   license={MIT}
