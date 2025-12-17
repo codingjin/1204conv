@@ -57,6 +57,9 @@ Generated files (NOT version controlled):
   scripts/           - Generated run scripts
   run_all.sh         - Master run script
   run_layer_*.sh     - Per-case run scripts
+  allkernels.json.{GPU} - Combined tuning results (GPU-specific)
+  dataset_energy.csv - ML training dataset
+  kernel_metadata.csv - Kernel metadata
 ```
 
 ## Complete Workflow
@@ -77,7 +80,7 @@ bash pipeline.sh --test
 2. **Stage 2**: TVM Tuning (auto-scheduler optimization)
 3. **Stage 3**: Kernel Generation (CUDA code + run scripts)
 4. **Stage 4**: Energy Measurement (all kernels × all power caps)
-5. **Stage 5**: Data Processing (CSV files + ML dataset)
+5. **Stage 5**: Data Processing (combined tuning results + CSV files + ML dataset)
 
 **Features:**
 - Progress tracking with colored output
@@ -227,6 +230,15 @@ python3 gendata.py case1
 
 **What happens:**
 
+**Step 0: Combine Tuning Results** ⭐ **NEW**
+- Reads all `tuningresults/case{N}_*.json` files (filtered tuning results)
+- Combines them into a single file maintaining order:
+  - Line order within each file preserved
+  - File order: case1_* → case2_* → case3_* → ...
+- Output: `allkernels.json.{GPU}` in project root (e.g., `allkernels.json.RTX3090`)
+- GPU name auto-detected using same mapping as ML dataset
+- Purpose: Consolidated view of all tuning results for analysis
+
 **Step 1: Parse Raw Outputs**
 - Reads `kernel_outputs/case{N}/powercap{1-5}/output_kernel{K}.txt`
 - Extracts metrics using regex:
@@ -282,6 +294,7 @@ kernel_outputs/case1/
 ├── powercapN/results.csv     (N varies by GPU)
 └── all.csv                   (combined)
 
+allkernels.json.{GPU}         (Combined tuning results - project root)
 dataset_energy.csv            (ML training dataset - project root)
 ```
 
@@ -403,6 +416,7 @@ python3 gendata.py case1     # Process specific case only
 ```
 
 **Outputs**:
+- `allkernels.json.{GPU}` - Combined tuning results from all cases (project root)
 - `kernel_outputs/<case>/powercap<N>/results.csv` - Per-powercap metrics
 - `kernel_outputs/<case>/all.csv` - Combined metrics across all power caps
 - `dataset_energy.csv` - ML training dataset (project root)

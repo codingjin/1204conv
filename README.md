@@ -160,6 +160,7 @@ python3 gendata.py case1
 ```
 
 **What it does:**
+0. **Combines tuning results**: Creates `allkernels.json.{GPU}` from all `tuningresults/case*.json` files ⭐ **NEW**
 1. Parses raw `output_kernel*.txt` files to extract GFLOP/s, energy (mJ), and execution time (ms)
 2. Calculates EDP (Energy-Delay Product) = exec_time × energy
 3. Generates `results.csv` files per power cap with columns: `id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ)`
@@ -167,9 +168,10 @@ python3 gendata.py case1
 5. **Generates ML training dataset**: `dataset_energy.csv` with format `id,gpu,powercap(w),energy(mj)`
 
 **Output**:
+- **`allkernels.json.{GPU}`** - Combined tuning results from all cases (project root) ⭐ **NEW**
 - `kernel_outputs/case{N}/powercap{1-N}/results.csv` - Parsed metrics per power cap
 - `kernel_outputs/case{N}/all.csv` - Combined data from all power caps
-- **`dataset_energy.csv`** - ML training dataset (project root) ⭐ **NEW**
+- **`dataset_energy.csv`** - ML training dataset (project root)
 
 ## Project Structure
 
@@ -277,6 +279,13 @@ python3 gendata.py case1
 ```
 
 **What happens:**
+0. **Step 0: Combine Tuning Results** ⭐ **NEW**
+   - Reads all `tuningresults/case{N}_*.json` files (filtered tuning results)
+   - Combines them maintaining order: case1_* → case2_* → case3_* → ...
+   - Preserves line order within each file
+   - Output: `allkernels.json.{GPU}` in project root (GPU auto-detected)
+   - Purpose: Consolidated view of all tuning results for analysis
+
 1. **Step 1: Parse Raw Outputs**
    - Reads `kernel_outputs/case{N}/powercap{1-N}/output_kernel{K}.txt` (N varies by GPU)
    - Extracts GFLOP/s, energy (mJ), and execution time (ms) using regex
@@ -288,7 +297,7 @@ python3 gendata.py case1
    - Combines into `all.csv` with 1 + (3 × N) columns: `id` + (perf, energy, EDP) × N power caps
    - Each row contains complete data for one kernel across all power cap settings
 
-3. **Step 3: Generate ML Training Dataset** ⭐ **NEW**
+3. **Step 3: Generate ML Training Dataset**
    - Extracts energy data from all kernels into single ML-ready CSV
    - **Ordering**: case1→case2→... then kernel1→kernel2→... then powercap1→powercap2→...
    - Output: `dataset_energy.csv` with format `id,gpu,powercap(w),energy(mj)`
@@ -296,6 +305,7 @@ python3 gendata.py case1
    - See `ML_DATASET_DOCUMENTATION.md` for details
 
 **Output:**
+- **`allkernels.json.{GPU}`** - Combined tuning results from all cases (project root)
 - `kernel_outputs/case{N}/powercap{1-N}/results.csv` - Parsed metrics per power cap
 - `kernel_outputs/case{N}/all.csv` - Combined data from all power caps
 - **`dataset_energy.csv`** - ML training dataset (project root)
@@ -380,6 +390,7 @@ kernel_outputs/case{N}/
 ├── powercapN/results.csv          # N varies by GPU (3-5)
 └── all.csv                        # Combined data from all power caps
 
+allkernels.json.{GPU}              # Combined tuning results (project root)
 dataset_energy.csv                 # ML training dataset (project root)
 ```
 

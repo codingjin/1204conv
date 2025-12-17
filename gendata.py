@@ -341,6 +341,105 @@ def process_case(case_dir, num_power_caps):
 
 
 # ============================================================================
+# STEP 0: Combine Tuning Results
+# ============================================================================
+
+def combine_tuning_results(gpu_config):
+    """
+    Combine all case{N}_*.json files from tuningresults/ directory.
+
+    Maintains:
+    - Line order within each file
+    - File order: case1_* -> case2_* -> case3_* -> ...
+
+    Output: allkernels.json.{GPU} (in current project directory)
+
+    Args:
+        gpu_config: GPU configuration dict from detect_gpu()
+
+    Returns:
+        Path to combined file or None if failed
+    """
+    print("\n" + "="*80)
+    print("COMBINING TUNING RESULTS")
+    print("="*80)
+
+    tuningresults_dir = Path('tuningresults')
+
+    if not tuningresults_dir.exists():
+        print(f"\nWarning: {tuningresults_dir} directory not found")
+        print("Skipping tuning results combination.")
+        return None
+
+    # Find all case{N}_*.json files
+    json_files = list(tuningresults_dir.glob('case*_*.json'))
+
+    if not json_files:
+        print(f"\nWarning: No case*.json files found in {tuningresults_dir}")
+        return None
+
+    # Map GPU short names to ML-friendly names
+    gpu_name_map = {
+        '3090': 'RTX3090',
+        '4090': 'RTX4090',
+        'V100': 'V100',
+        'A30': 'A30',
+        'A100': 'A100'
+    }
+
+    gpu_name = gpu_name_map.get(gpu_config['name'], gpu_config['name'])
+    print(f"Detected GPU: {gpu_name}")
+
+    # Sort files by case number
+    # Extract case number from filename: case1_*.json -> 1
+    def get_case_number(filepath):
+        match = re.search(r'case(\d+)_', filepath.name)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    json_files = sorted(json_files, key=get_case_number)
+
+    print(f"\nFound {len(json_files)} JSON files to combine:")
+    for jf in json_files:
+        print(f"  - {jf.name}")
+
+    # Output filename: allkernels.json.{GPU} (in current project directory)
+    output_file = Path(f'allkernels.json.{gpu_name}')
+    combined_lines = []
+
+    # Read each file and append lines in order
+    for json_file in json_files:
+        print(f"\nReading {json_file.name}...")
+        try:
+            with open(json_file, 'r') as f:
+                lines = f.readlines()
+                combined_lines.extend(lines)
+                print(f"  ✓ Added {len(lines)} lines")
+        except Exception as e:
+            print(f"  Error reading {json_file}: {e}")
+            continue
+
+    # Write combined file
+    print(f"\nWriting to {output_file}...")
+    try:
+        with open(output_file, 'w') as f:
+            f.writelines(combined_lines)
+        print(f"\n{'='*80}")
+        print(f"TUNING RESULTS COMBINATION COMPLETE")
+        print(f"{'='*80}")
+        print(f"Output file: {output_file}")
+        print(f"GPU: {gpu_name}")
+        print(f"Total files combined: {len(json_files)}")
+        print(f"Total lines: {len(combined_lines)}")
+        print(f"{'='*80}\n")
+        return output_file
+    except Exception as e:
+        print(f"Error writing {output_file}: {e}")
+        return None
+
+
+# ============================================================================
 # STEP 3: Generate ML Training Dataset
 # ============================================================================
 
@@ -509,6 +608,11 @@ def main():
     print(f"Number of power caps for this GPU: {num_power_caps}")
     print("="*80 + "\n")
 
+    # ========================================================================
+    # STEP 0: Combine Tuning Results
+    # ========================================================================
+    combined_file = combine_tuning_results(gpu_config)
+
     # Check if specific case_id provided as command-line argument
     target_case_id = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -576,6 +680,8 @@ def main():
         print(f"ALL PROCESSING COMPLETE")
         print(f"{'='*80}")
         print(f"\nGenerated files:")
+        if combined_file:
+            print(f"  0. Combined tuning results: {combined_file}")
         print(f"  1. Per-powercap results: kernel_outputs/<case>/powercap<N>/results.csv")
         print(f"  2. Combined results: kernel_outputs/<case>/all.csv")
         print(f"  3. ML training dataset: {ml_dataset_file}")

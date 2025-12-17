@@ -17,7 +17,7 @@ Runs all 5 stages:
 2. TVM Tuning (8 cases, 1000 trials, 25 kernels)
 3. Kernel Generation (3 lrounds)
 4. Energy Measurement (all kernels × all power caps)
-5. Data Processing (generate dataset_energy.csv)
+5. Data Processing (combine tuning results + generate dataset_energy.csv)
 
 **Time**: 4-8 hours (depending on GPU and number of kernels)
 
@@ -153,12 +153,14 @@ bash pipeline.sh --help
 
 ### Stage 5: Data Processing
 **What it does**:
+- Combines all tuning results into single file
 - Parses raw measurement outputs
 - Generates per-powercap CSV files
 - Generates combined all.csv files
 - Creates ML training dataset
 
 **Output**:
+- `allkernels.json.{GPU}` (combined tuning results)
 - `kernel_outputs/case*/powercap*/results.csv`
 - `kernel_outputs/case*/all.csv`
 - `dataset_energy.csv` (ML dataset)
@@ -236,6 +238,7 @@ kernel_outputs/
 │   └── all.csv
 └── ...
 
+allkernels.json.{GPU}      # Combined tuning results
 dataset_energy.csv         # ML training dataset
 pipeline_*.log             # Execution log
 ```
