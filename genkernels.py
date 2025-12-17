@@ -12,6 +12,62 @@ import glob
 import csv
 import re
 import argparse
+import subprocess
+import sys
+
+# GPU Configuration Database (same as gpu_setup.py)
+GPU_CONFIGS = {
+    'NVIDIA GeForce RTX 3090': {
+        'name': '3090',
+        'power_caps': [100, 200, 300, 400, 450],  # Watts
+    },
+    'NVIDIA GeForce RTX 4090': {
+        'name': '4090',
+        'power_caps': [150, 200, 300, 400, 450],  # Watts
+    },
+    'Tesla V100-SXM2-16GB': {
+        'name': 'V100',
+        'power_caps': [100, 150, 200, 250, 300],  # Watts
+    },
+    'NVIDIA A30': {
+        'name': 'A30',
+        'power_caps': [100, 130, 165],  # Watts
+    },
+    'NVIDIA A100': {
+        'name': 'A100',
+        'power_caps': [100, 200, 250, 300, 400],  # Watts
+    },
+}
+
+def run_command(cmd):
+    """Execute shell command and return output."""
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+        return result.stdout.strip(), 0
+    except subprocess.CalledProcessError as e:
+        return e.stderr, e.returncode
+
+def detect_gpu():
+    """Detect GPU model and return configuration."""
+    cmd = "nvidia-smi --query-gpu=name --format=csv,noheader -i 0"
+    output, ret = run_command(cmd)
+
+    if ret != 0:
+        print("Warning: Could not detect GPU. Defaulting to 5 power caps.")
+        return None, {'name': 'Unknown', 'power_caps': [100, 200, 300, 400, 450]}
+
+    gpu_name = output.strip()
+    print(f"Detected GPU: {gpu_name}")
+
+    # Match GPU name to configuration
+    for known_gpu, config in GPU_CONFIGS.items():
+        if known_gpu in gpu_name or config['name'] in gpu_name:
+            print(f"Matched to configuration: {config['name']}")
+            print(f"Power caps: {config['power_caps']}")
+            return gpu_name, config
+
+    print(f"Warning: GPU '{gpu_name}' not in supported list. Defaulting to 5 power caps.")
+    return gpu_name, {'name': 'Unknown', 'power_caps': [100, 200, 300, 400, 450]}
 
 def get_verify_pass(valid, **kwargs):
     print(kwargs)
@@ -65,6 +121,15 @@ parser.add_argument('--test', action='store_true', help='Use test mode (1 lround
 parser.add_argument('--input_dir', type=str, default='tuningresults',
                     help='Directory containing tuning result JSON files (default: tuningresults)')
 args = parser.parse_args()
+
+# Detect GPU and get power cap configuration
+print("\n" + "="*80)
+print("  GPU DETECTION")
+print("="*80)
+gpu_name, gpu_config = detect_gpu()
+num_power_caps = len(gpu_config['power_caps'])
+print(f"Number of power caps for this GPU: {num_power_caps}")
+print("="*80 + "\n")
 
 # Fixed measurement parameters
 iterations_per_round = 100
@@ -169,8 +234,8 @@ for file_idx, json_file in enumerate(json_files):
     os.makedirs(layer_build_dir, exist_ok=True)
     os.makedirs(layer_scripts_dir, exist_ok=True)
 
-    # Create power cap subdirectories (1-5)
-    for pc_idx in range(1, 6):
+    # Create power cap subdirectories based on detected GPU
+    for pc_idx in range(1, num_power_caps + 1):
         powercap_dir = os.path.join(layer_outputs_dir, f"powercap{pc_idx}")
         os.makedirs(powercap_dir, exist_ok=True)
 
@@ -287,8 +352,8 @@ for file_idx, json_file in enumerate(json_files):
 
         print(f"    Grid/Block: grid={int(grid)}, block={int(block)}")
 
-        # Generate 5 run scripts for this kernel (one for each power cap)
-        for pc_idx in range(1, 6):
+        # Generate run scripts for this kernel (one for each power cap)
+        for pc_idx in range(1, num_power_caps + 1):
             run_script = f"""#!/bin/bash
 # Auto-generated run script for kernel {kernel_idx} - Power Cap {pc_idx}
 # Source: {os.path.basename(json_file)} - config {config_idx}
@@ -297,7 +362,7 @@ for file_idx, json_file in enumerate(json_files):
 # GPU Architecture: {gpu_arch}
 # Original execution time: {exec_time_ms:.6f} ms
 # Measurement mode: {mode_name} ({num_lrounds} lrounds)
-# Power Cap Setting: {pc_idx}/5
+# Power Cap Setting: {pc_idx}/{num_power_caps}
 
 echo "========================================="
 echo "Kernel {kernel_idx} - Power Cap {pc_idx}"
@@ -390,24 +455,24 @@ cd "$PROJECT_ROOT"
 
     # Generate layer-level run script (runs all configs for this layer with all power caps)
     layer_run_script = f"""#!/bin/bash
-# Run all {len(layer_kernel_indices)} kernels × 5 power caps for layer: {layer_name} ({layer_id})
-# Total runs: {len(layer_kernel_indices) * 5}
+# Run all {len(layer_kernel_indices)} kernels × {num_power_caps} power caps for layer: {layer_name} ({layer_id})
+# Total runs: {len(layer_kernel_indices) * num_power_caps}
 
-echo "Running all {len(layer_kernel_indices)} kernels × 5 power caps for {layer_name}..."
-echo "Total runs: {len(layer_kernel_indices) * 5}"
+echo "Running all {len(layer_kernel_indices)} kernels × {num_power_caps} power caps for {layer_name}..."
+echo "Total runs: {len(layer_kernel_indices) * num_power_caps}"
 echo "{'='*60}"
 
 """
-    # Run each kernel with all 5 power caps
+    # Run each kernel with all power caps
     for kid in layer_kernel_indices:
-        layer_run_script += f"\necho \"\"\necho \"Kernel {kid} - Running all 5 power cap variants...\"\n"
-        for pc_idx in range(1, 6):
+        layer_run_script += f"\necho \"\"\necho \"Kernel {kid} - Running all {num_power_caps} power cap variants...\"\n"
+        for pc_idx in range(1, num_power_caps + 1):
             layer_run_script += f"bash scripts/{layer_id}/run_kernel{kid}_powercap{pc_idx}.sh\n"
 
     layer_run_script += f"""
 echo ""
 echo "All kernels × power caps for {layer_name} completed!"
-echo "Total runs: {len(layer_kernel_indices) * 5}"
+echo "Total runs: {len(layer_kernel_indices) * num_power_caps}"
 echo ""
 """
 
@@ -415,7 +480,7 @@ echo ""
     with open(layer_run_script_path, "w") as f:
         f.write(layer_run_script)
     os.chmod(layer_run_script_path, 0o755)
-    print(f"  Generated layer run script: {layer_run_script_path} ({len(layer_kernel_indices)} kernels × 5 power caps)")
+    print(f"  Generated layer run script: {layer_run_script_path} ({len(layer_kernel_indices)} kernels × {num_power_caps} power caps)")
 
 print(f"\n{'='*80}")
 print(f"Kernel generation complete!")
@@ -484,10 +549,10 @@ print(f"CMakeLists.txt generated successfully")
 
 # Generate master run script to execute all kernels with all power caps
 print(f"\nGenerating master run scripts...")
-total_runs = total_kernels_generated * 5
+total_runs = total_kernels_generated * num_power_caps
 master_script = f"""#!/bin/bash
 # Master script to run all generated kernels × all power caps
-# Total: {total_kernels_generated} kernels × 5 power caps = {total_runs} runs across {len(json_files)} cases
+# Total: {total_kernels_generated} kernels × {num_power_caps} power caps = {total_runs} runs across {len(json_files)} cases
 # WARNING: This will run ALL kernels with ALL power caps sequentially!
 # This may take a VERY long time. Consider using layer scripts instead.
 # Recommended: Run layer scripts on different GPUs in parallel
@@ -515,7 +580,7 @@ echo ""
 echo "{'='*60}"
 echo "STEP 1: Running all kernels"
 echo "{'='*60}"
-echo "Running all {total_kernels_generated} kernels × 5 power caps from {len(json_files)} layers..."
+echo "Running all {total_kernels_generated} kernels × {num_power_caps} power caps from {len(json_files)} layers..."
 echo "Total runs: {total_runs}"
 echo "{'='*60}"
 
@@ -585,17 +650,19 @@ print(f"Master script: run_all.sh")
 print(f"Metadata: {metadata_csv_path}")
 print(f"")
 print(f"Power cap configuration:")
-print(f"  Each kernel has 5 power cap variants (powercap1 - powercap5)")
-print(f"  Total measurement runs: {total_kernels_generated} kernels × 5 power caps = {total_kernels_generated * 5}")
-print(f"  Output structure: kernel_outputs/<layer_id>/powercap<1-5>/output_kernel<N>.txt")
+print(f"  GPU: {gpu_config['name']} with {num_power_caps} power cap settings")
+print(f"  Power caps: {gpu_config['power_caps']} Watts")
+print(f"  Each kernel has {num_power_caps} power cap variants (powercap1 - powercap{num_power_caps})")
+print(f"  Total measurement runs: {total_kernels_generated} kernels × {num_power_caps} power caps = {total_kernels_generated * num_power_caps}")
+print(f"  Output structure: kernel_outputs/<layer_id>/powercap<1-{num_power_caps}>/output_kernel<N>.txt")
 print(f"")
 print(f"To build and run:")
-print(f"  Single kernel/power cap:  bash scripts/<layer_id>/run_kernel<N>_powercap<1-5>.sh")
+print(f"  Single kernel/power cap:  bash scripts/<layer_id>/run_kernel<N>_powercap<1-{num_power_caps}>.sh")
 print(f"  Entire layer (all PCs):   bash run_layer_<layer_id>.sh")
 print(f"  All kernels (all PCs):    bash run_all.sh")
 print(f"  CMake build:              mkdir -p build && cd build && cmake .. && make -j")
 print(f"")
 print(f"GPU setup:")
 print(f"  Detect GPU:               python3 gpu_setup.py --detect")
-print(f"  Manual setup:             python3 gpu_setup.py <1-5>")
+print(f"  Manual setup:             python3 gpu_setup.py <1-{num_power_caps}>")
 print(f"{'='*80}")

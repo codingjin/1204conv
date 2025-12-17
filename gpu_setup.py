@@ -12,7 +12,7 @@ import re
 GPU_CONFIGS = {
     'NVIDIA GeForce RTX 3090': {
         'name': '3090',
-        'power_caps': [100, 200, 300, 420, 450],  # Watts
+        'power_caps': [100, 200, 300, 400, 450],  # Watts
     },
     'NVIDIA GeForce RTX 4090': {
         'name': '4090',
@@ -24,7 +24,7 @@ GPU_CONFIGS = {
     },
     'NVIDIA A30': {
         'name': 'A30',
-        'power_caps': [100, 120, 140, 160, 165],  # Watts
+        'power_caps': [100, 130, 165],  # Watts
     },
     'NVIDIA A100': {
         'name': 'A100',

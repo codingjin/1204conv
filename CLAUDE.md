@@ -28,7 +28,7 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 - `setup_passwordless_sudo.sh` - Configures passwordless sudo
 
 **Post-Processing:**
-- `generate_perfenergy.py` - Aggregates measurement results to CSV
+- `gendata.py` - Aggregates measurement results to CSV
 
 **Utilities:**
 - `clean.sh` - Removes all generated files
@@ -38,7 +38,7 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 ```
 Source files (version controlled):
   conv_tuning.py, genkernels.py, gpu_setup.py, demo.cu, main.cpp
-  generate_perfenergy.py, tuning_gpu_setup.sh, setup_passwordless_sudo.sh, clean.sh
+  gendata.py, tuning_gpu_setup.sh, setup_passwordless_sudo.sh, clean.sh
   README.md, CLAUDE.md
 
 Generated files (NOT version controlled):
@@ -165,22 +165,24 @@ bash scripts/case1/run_kernel1_powercap3.sh
 **GPU Power Caps** (gpu_setup.py:12-33):
 ```python
 GPU_CONFIGS = {
-    'NVIDIA GeForce RTX 3090': {'power_caps': [100, 200, 300, 420, 450]},
+    'NVIDIA GeForce RTX 3090': {'power_caps': [100, 200, 300, 400, 450]},
     'NVIDIA GeForce RTX 4090': {'power_caps': [150, 200, 300, 400, 450]},
     'Tesla V100-SXM2-16GB': {'power_caps': [100, 150, 200, 250, 300]},
-    'NVIDIA A30': {'power_caps': [100, 120, 140, 160, 165]},
+    'NVIDIA A30': {'power_caps': [100, 130, 165]},  # 3 power caps
     'NVIDIA A100': {'power_caps': [100, 200, 250, 300, 400]},
 }
 ```
+
+**Note**: The number of power caps varies by GPU. Scripts automatically detect GPU and adapt accordingly.
 
 ### Phase 4: Post-Processing Results
 
 ```bash
 # Aggregate all measurement results
-python3 generate_perfenergy.py
+python3 gendata.py
 
 # Or process specific case only
-python3 generate_perfenergy.py case1
+python3 gendata.py case1
 ```
 
 **What happens:**
@@ -199,14 +201,35 @@ python3 generate_perfenergy.py case1
   ```
 
 **Step 2: Generate Combined Data**
-- Reads all 5 `results.csv` files (including EDP values)
-- Generates `all.csv` - Combined raw data from all power caps (all values as integers):
+- Reads all N `results.csv` files (N = number of power caps for detected GPU)
+- Generates `all.csv` - Combined raw data from all power caps:
   ```csv
   id,perf(GFLOP/s),energy(mJ),EDP(ms*mJ),perf(GFLOP/s),energy(mJ),EDP(ms*mJ),...
      [powercap1]                          [powercap2]
-  1,1234,16,19,1200,18,22,...
+  1,1234,16.123,19.876,1200,18.456,22.147,...
   ```
-- Total columns: 1 (id) + 3 × 5 (perf/energy/EDP for each powercap) = 16 columns
+- Total columns: 1 (id) + 3 × N (perf/energy/EDP for each powercap)
+  - RTX 3090/4090/V100/A100: 16 columns (5 power caps)
+  - A30: 10 columns (3 power caps)
+
+**Step 3: Generate ML Training Dataset** ⭐ **NEW**
+- Extracts energy data from all kernels into a single ML-ready file
+- Output: `dataset_energy.csv` in project root
+- Format: `id,gpu,powercap(w),energy(mj)`
+- **Critical Ordering**: case1→case2→... then kernel1→kernel2→... then powercap1→powercap2→...
+- Example:
+  ```csv
+  id,gpu,powercap(w),energy(mj)
+  1,RTX3090,100,16.123
+  2,RTX3090,200,18.456
+  3,RTX3090,300,20.789
+  4,RTX3090,400,23.012
+  5,RTX3090,450,25.345
+  6,RTX3090,100,15.987
+  ...
+  ```
+- Purpose: Train ML models to predict CUDA kernel energy consumption
+- See `ML_DATASET_DOCUMENTATION.md` for detailed documentation
 
 **Output Structure:**
 ```
@@ -216,8 +239,10 @@ kernel_outputs/case1/
 │   └── results.csv           (parsed)
 ├── powercap2/results.csv
 ├── ...
-├── powercap5/results.csv
+├── powercapN/results.csv     (N varies by GPU)
 └── all.csv                   (combined)
+
+dataset_energy.csv            (ML training dataset - project root)
 ```
 
 ## Key Functions and Logic
@@ -301,9 +326,21 @@ Options:
 ### gpu_setup.py
 
 ```bash
-python gpu_setup.py <1-5>        # Set power cap (1=lowest, 5=highest)
+python gpu_setup.py <1-N>        # Set power cap (1=lowest, N=highest, N varies by GPU)
 python gpu_setup.py --detect     # Detect GPU and show config
 ```
+
+### gendata.py
+
+```bash
+python3 gendata.py           # Process all cases
+python3 gendata.py case1     # Process specific case only
+```
+
+**Outputs**:
+- `kernel_outputs/<case>/powercap<N>/results.csv` - Per-powercap metrics
+- `kernel_outputs/<case>/all.csv` - Combined metrics across all power caps
+- `dataset_energy.csv` - ML training dataset (project root)
 
 ## Test Mode vs Normal Mode
 
@@ -400,6 +437,60 @@ Does NOT remove: tuningresults/, tuningrecords/, source code.
 - **Why two filtering modes?** Test mode (2 kernels) for quick validation, normal mode (25 kernels) for comprehensive performance analysis
 - **Why separate tuningrecords/ and tuningresults/?** Keep raw data (tuningrecords/) separate from filtered data (tuningresults/) for reproducibility
 - **Why disable extra GPUs?** Ensures consistent tuning results on multi-GPU systems (TVM uses all visible GPUs by default)
-- **Why 5 power caps?** Provides energy/performance trade-off curve from low power to maximum performance
+- **Why variable power caps?** Different GPUs have different power ranges. Scripts auto-detect GPU and use appropriate power caps (3-5 settings) to provide energy/performance trade-off curves
 - **Why lrounds?** Multiple measurement rounds reduce noise in energy readings (GPU power fluctuates)
+- **Why GPU-aware scripts?** Automatically adapts to detected GPU, eliminating hardcoded assumptions and preventing measurement failures on different hardware
+
+## ML Dataset Generation
+
+The pipeline generates `dataset_energy.csv` for training machine learning models to predict CUDA kernel energy consumption.
+
+### Dataset Format
+
+```csv
+id,gpu,powercap(w),energy(mj)
+1,RTX3090,100,16.123
+2,RTX3090,200,18.456
+3,RTX3090,300,20.789
+...
+```
+
+### Data Ordering
+
+**Critical for ML**: Data is ordered hierarchically to group kernel variations:
+
+```
+case1 → case2 → case3 → ... (sorted)
+  ↓
+  kernel1 → kernel2 → kernel3 → ... (sorted)
+    ↓
+    powercap1 → powercap2 → powercap3 → ... (sorted)
+```
+
+**Example**: IDs 1-5 are the same kernel (case1/kernel1) at different power caps. This groups variations of identical kernel configurations, allowing ML models to learn the power cap → energy relationship effectively.
+
+### Dataset Size
+
+```
+Total Samples = (Cases) × (Kernels per Case) × (Power Caps)
+```
+
+**Examples**:
+- RTX 3090: 8 cases × 25 kernels × 5 power caps = **1,000 samples**
+- A30: 8 cases × 25 kernels × 3 power caps = **600 samples**
+
+### Usage for ML
+
+1. **Load dataset**: `df = pd.read_csv('dataset_energy.csv')`
+2. **Preprocess**: One-hot encode `gpu`, normalize `powercap(w)`
+3. **Join with kernel metadata**: Add Conv2D parameters (N, H, W, CO, CI, etc.) from `kernel_metadata.csv`
+4. **Train model**: Predict `energy(mj)` from GPU type, power cap, and kernel configuration
+
+See `ML_DATASET_DOCUMENTATION.md` for comprehensive documentation on:
+- Detailed format specification
+- GPU-specific behavior
+- ML model considerations
+- Feature engineering recommendations
+- Multi-GPU dataset creation
+
 - to memorize
