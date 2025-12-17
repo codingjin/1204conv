@@ -38,6 +38,44 @@ export TVM_HOME=/path/to/tvm
 
 ## Quick Start
 
+### Option A: All-in-One Pipeline (Recommended)
+
+Run the complete pipeline with a single command:
+
+```bash
+# Full pipeline (all 8 cases, 1000 trials, 25 kernels)
+bash pipeline.sh
+
+# Test mode (2 cases, 100 trials, 2 kernels - 3x faster)
+bash pipeline.sh --test
+
+# Skip GPU setup if already done
+bash pipeline.sh --skip-setup
+
+# Resume from specific stage (1-5)
+bash pipeline.sh --resume 3
+```
+
+**What it does:**
+1. ✓ GPU Setup (passwordless sudo, persistent mode)
+2. ✓ TVM Tuning (auto-scheduler optimization)
+3. ✓ Kernel Generation (CUDA code + run scripts)
+4. ✓ Energy Measurement (all kernels × all power caps)
+5. ✓ Data Processing (CSV files + ML dataset)
+
+**Features:**
+- Progress tracking with colored output
+- Automatic error handling
+- Resume capability from any stage
+- Detailed logging to `pipeline_YYYYMMDD_HHMMSS.log`
+- Time estimates and elapsed time display
+
+---
+
+### Option B: Manual Step-by-Step
+
+Run each stage individually for more control:
+
 ### 1. GPU Setup (Required Before Tuning)
 
 **Run this once before starting TVM tuning:**
@@ -137,11 +175,12 @@ python3 gendata.py case1
 
 ```
 .
+├── pipeline.sh                 # All-in-one pipeline driver (recommended)
 ├── conv_tuning.py              # TVM auto-scheduler for Conv2D
 ├── genkernels.py               # CUDA kernel generator
-├── gendata.py      # Post-processing and ML dataset generation
+├── gendata.py                  # Post-processing and ML dataset generation
 ├── gpu_setup.py                # GPU power cap configuration (for measurement)
-├── tuning_gpu_setup.sh         # GPU setup for TVM tuning (run first!)
+├── tuning_gpu_setup.sh         # GPU setup for TVM tuning
 ├── setup_passwordless_sudo.sh  # Standalone passwordless sudo setup
 ├── clean.sh                    # Remove all generated files
 ├── demo.cu                     # Kernel wrapper template
@@ -484,21 +523,50 @@ This removes:
 If you use this code in your research, please cite:
 
 ```bibtex
-@misc{tvm-conv2d-energy,
+@software{tvm_conv2d_energy_2025,
   title={TVM Conv2D Auto-Scheduler with Energy Measurement},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/yourrepo}
+  author={Jin},
+  year={2025},
+  url={https://github.com/codingjin/1204conv},
+  license={MIT}
 }
 ```
 
 ## License
 
-[Your chosen license]
+This project is licensed under the MIT License.
+
+Copyright (c) 2025 Jin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### Third-Party Licenses
+
+This project uses:
+- [Apache TVM](https://tvm.apache.org/) - Apache License 2.0
+- [NVIDIA Management Library (NVML)](https://developer.nvidia.com/nvidia-management-library-nvml) - NVIDIA Software License
 
 ## Contact
 
-[Your contact information]
+**Email**: 475166289@qq.com
+
+For bug reports and feature requests, please use [GitHub Issues](https://github.com/codingjin/1204conv/issues).
 
 ## Acknowledgments
 

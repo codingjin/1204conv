@@ -14,6 +14,13 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 
 ### Core Scripts
 
+**Pipeline Driver:**
+- `pipeline.sh` - **All-in-one automated pipeline (recommended)**
+  - Runs all 5 stages automatically
+  - Progress tracking and error handling
+  - Resume capability, test mode support
+  - See `PIPELINE_USAGE.md` for details
+
 **Tuning Phase:**
 - `conv_tuning.py` - TVM auto-scheduler for Conv2D kernels
 - `tuning_gpu_setup.sh` - GPU setup (must run before tuning)
@@ -28,7 +35,7 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 - `setup_passwordless_sudo.sh` - Configures passwordless sudo
 
 **Post-Processing:**
-- `gendata.py` - Aggregates measurement results to CSV
+- `gendata.py` - Aggregates measurement results to CSV and ML dataset
 
 **Utilities:**
 - `clean.sh` - Removes all generated files
@@ -37,9 +44,9 @@ This is a TVM-based Conv2D auto-scheduler with GPU energy measurement pipeline. 
 
 ```
 Source files (version controlled):
-  conv_tuning.py, genkernels.py, gpu_setup.py, demo.cu, main.cpp
+  pipeline.sh, conv_tuning.py, genkernels.py, gpu_setup.py, demo.cu, main.cpp
   gendata.py, tuning_gpu_setup.sh, setup_passwordless_sudo.sh, clean.sh
-  README.md, CLAUDE.md
+  README.md, CLAUDE.md, PIPELINE_USAGE.md, ML_DATASET_DOCUMENTATION.md
 
 Generated files (NOT version controlled):
   tuningrecords/     - Raw TVM tuning logs
@@ -53,6 +60,39 @@ Generated files (NOT version controlled):
 ```
 
 ## Complete Workflow
+
+### Option A: Automated Pipeline (Recommended)
+
+**Quick Start:**
+```bash
+# Full pipeline (6-10 hours)
+bash pipeline.sh
+
+# Test mode (1-2 hours)
+bash pipeline.sh --test
+```
+
+**What it does:**
+1. **Stage 1**: GPU Setup (passwordless sudo, persistent mode)
+2. **Stage 2**: TVM Tuning (auto-scheduler optimization)
+3. **Stage 3**: Kernel Generation (CUDA code + run scripts)
+4. **Stage 4**: Energy Measurement (all kernels × all power caps)
+5. **Stage 5**: Data Processing (CSV files + ML dataset)
+
+**Features:**
+- Progress tracking with colored output
+- Automatic error handling and verification
+- Resume from any stage: `bash pipeline.sh --resume N`
+- Skip GPU setup: `bash pipeline.sh --skip-setup`
+- Detailed logging to `pipeline_YYYYMMDD_HHMMSS.log`
+
+**See:** `PIPELINE_USAGE.md` for detailed documentation
+
+---
+
+### Option B: Manual Step-by-Step
+
+For more control, run each phase individually:
 
 ### Phase 1: TVM Tuning
 
@@ -300,6 +340,31 @@ dataset_energy.csv            (ML training dataset - project root)
 - Ensures only GPU 0 is used for consistent measurements
 
 ## Command Reference
+
+### pipeline.sh (Recommended)
+
+```bash
+bash pipeline.sh [OPTIONS]
+
+Options:
+  --test          Run in test mode (faster, fewer kernels)
+  --skip-setup    Skip GPU setup (stage 1)
+  --resume <N>    Resume from stage N (1-5)
+  --help          Show help message
+
+Stages:
+  1. GPU Setup
+  2. TVM Tuning
+  3. Kernel Generation
+  4. Energy Measurement
+  5. Data Processing
+
+Examples:
+  bash pipeline.sh                    # Run full pipeline
+  bash pipeline.sh --test             # Test mode (1-2 hours)
+  bash pipeline.sh --resume 3         # Resume from stage 3
+  bash pipeline.sh --skip-setup       # Skip stage 1
+```
 
 ### conv_tuning.py
 
